@@ -3,12 +3,13 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-[RequireComponent(typeof(Rigidbody2D), typeof(TrailRenderer))]
-public class Player2DPlatformerMovement : MonoBehaviour
+[RequireComponent(typeof(Rigidbody), typeof(TrailRenderer))]
+public class Player3DPlatformerMovement : MonoBehaviour
 {
     [SerializeField] private bool isDead;
     public bool IsDead { get; set; }
 
+    #region INPUTS
     [SerializeField] private AudioClip jumpSound;
     [SerializeField] private AudioClip landSound;
 
@@ -16,6 +17,7 @@ public class Player2DPlatformerMovement : MonoBehaviour
     private InputAction move;
     private InputAction jump;
     private InputAction dash;
+    #endregion
 
     #region VARIABLES
     [Header("Available Controls")]
@@ -29,13 +31,12 @@ public class Player2DPlatformerMovement : MonoBehaviour
     [SerializeField] private bool toggleWallJumpOff;
 
     [Header("Components")]
-    [SerializeField] public Rigidbody2D rb; // Set Public for Knockback
+    [SerializeField] public Rigidbody rb; // Set Public for Knockback
     [SerializeField] private TrailRenderer tr;
 
     [SerializeField] private Transform groundCheck;
     [SerializeField] private LayerMask groundLayer;
-    // [SerializeField] private float groundDetectionRadius = 0.2f;
-    [SerializeField] private Vector2 groundDetectionSize = new Vector2(1f, 0.2f);
+    [SerializeField] private Vector3 groundDetectionSize = new Vector3(1f, 0.2f, 1f);
 
     [SerializeField] private Transform wallCheck;
     [SerializeField] private LayerMask wallLayer;
@@ -59,9 +60,9 @@ public class Player2DPlatformerMovement : MonoBehaviour
     // Facing direction
     [SerializeField] public bool isFacingRight = false;
     [SerializeField] public bool isMovingRight = false; // public for the weapon rotation
-    private Vector2 moveDirection;
+    private Vector3 moveDirection;
 
-    public Vector2 MoveDirection { get; set; }
+    public Vector3 MoveDirection { get; set; }
 
     [Header("Jump")]
     [SerializeField] private float jumpForce = 48f;
@@ -99,7 +100,7 @@ public class Player2DPlatformerMovement : MonoBehaviour
     [SerializeField] private float dashTime = 0.08f;
     [SerializeField] private float dashCooldown = 0.5f;
 
-    [SerializeField] private Vector2 dashDir;
+    [SerializeField] private Vector3 dashDir;
     [SerializeField] private bool canDash = true;
     [SerializeField] private bool isDashing = false;
     private float originalGravityScale;
@@ -128,7 +129,7 @@ public class Player2DPlatformerMovement : MonoBehaviour
     //Wall Jump
     [SerializeField] private float wallJumpTime = 0.2f;
     [SerializeField] private float wallJumpDuration = 0.1f;
-    [SerializeField] private Vector2 wallJumpForce = new Vector2(16, 20);
+    [SerializeField] private Vector3 wallJumpForce = new Vector3(16, 20, 0);
     private float wallJumpCounter;
     private float wallJumpDirection;
     private bool wallJumpInput = false;
@@ -164,7 +165,7 @@ public class Player2DPlatformerMovement : MonoBehaviour
 
     void Start()
     {
-        originalGravityScale = rb.gravityScale;
+        originalGravityScale = rb.drag;
 
         originalCrouchScale = transform.localScale;
         originalMaxSpeed = maxSpeed;
@@ -198,9 +199,6 @@ public class Player2DPlatformerMovement : MonoBehaviour
 
     void ProccessInput()
     {
-        //float horizontal = Input.GetAxisRaw("Horizontal");
-        //float vertical = Input.GetAxisRaw("Vertical");
-        //moveDirection = new Vector2(horizontal, vertical).normalized;
         moveDirection = move.ReadValue<Vector2>().normalized;
 
         wallClimbDirection = moveDirection.y;
@@ -222,12 +220,12 @@ public class Player2DPlatformerMovement : MonoBehaviour
 
         CoyoteTime();
         JumpBuffer();
-        // CheckFacingDirection();
 
         if (Input.GetButtonUp("Jump")) LowJump();
         if (rb.velocity.y < 0) FallMultiplier();
     }
 
+    #region MOVEMENT
     void Move()
     {
         if (isCrouching) Mathf.Clamp(maxSpeed, 0, crouchSpeed);
@@ -246,7 +244,7 @@ public class Player2DPlatformerMovement : MonoBehaviour
         float speedDif = targetSpeed - rb.velocity.x;
         float movement = speedDif * accelRate;
 
-        rb.AddForce(Vector2.right * movement);
+        rb.AddForce(Vector3.right * movement);
     }
 
     void Jump()
@@ -257,8 +255,8 @@ public class Player2DPlatformerMovement : MonoBehaviour
             jumpBufferCounter = 0;
             jumpCounter--;
 
-            rb.velocity = new Vector2(rb.velocity.x, 0);
-            rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+            rb.velocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
 
             if (SoundManager.Instance != null) SoundManager.Instance.PlaySound(jumpSound);
 
@@ -269,13 +267,13 @@ public class Player2DPlatformerMovement : MonoBehaviour
     void CrouchDown()
     {
         isCrouching = true;
-        transform.localScale = new Vector2(transform.localScale.x, transform.localScale.y * crouchScaleAmount);
+        transform.localScale = new Vector3(transform.localScale.x, transform.localScale.y * crouchScaleAmount, transform.localScale.z);
     }
 
     void CrouchUp()
     {
         isCrouching = false;
-        transform.localScale = new Vector2(transform.localScale.x, originalCrouchScale.y);
+        transform.localScale = new Vector3(transform.localScale.x, originalCrouchScale.y, transform.localScale.z);
     }
 
     IEnumerator Dash()
@@ -285,8 +283,8 @@ public class Player2DPlatformerMovement : MonoBehaviour
         SetGravityScale(0);
 
         dashDir = moveDirection;
-        if (dashDir == Vector2.zero) dashDir = new Vector2(-transform.localScale.x, 0);
-        rb.velocity = new Vector2(dashDir.x * maxSpeed * dashForce, 0);
+        if (dashDir == Vector3.zero) dashDir = new Vector3(-transform.localScale.x, 0, 0);
+        rb.velocity = new Vector3(dashDir.x * maxSpeed * dashForce, 0, dashDir.z * maxSpeed * dashForce);
         tr.emitting = true;
 
         yield return new WaitForSeconds(dashTime);
@@ -298,29 +296,30 @@ public class Player2DPlatformerMovement : MonoBehaviour
         yield return new WaitForSeconds(dashCooldown);
         canDash = true;
     }
+    #endregion
 
+    #region WALL INTERACTIONS
     void WallGrab()
     {
         SetGravityScale(0);
         if (isWallClimbing && !toggleWallClimbOff) {
             WallClimb();
         } else {
-            rb.velocity = new Vector2(rb.velocity.x, 0);
+            rb.velocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);
         }
     }
 
     void WallSlide()
     {
         SetGravityScale(0);
-        rb.velocity = new Vector2(rb.velocity.x, -wallSlideSpeed);
+        rb.velocity = new Vector3(rb.velocity.x, -wallSlideSpeed, rb.velocity.z);
     }
 
-    // Wall climb duration is linked to all climb duration. Climbing takes double stamina
     void WallClimb()
     {
         SetGravityScale(0);
         if (wallClimbDirection != 0) {
-            rb.velocity = new Vector2(rb.velocity.x, wallClimbDirection * wallClimbSpeed);
+            rb.velocity = new Vector3(rb.velocity.x, wallClimbDirection * wallClimbSpeed, rb.velocity.z);
         }
         wallGrabCounter -= wallClimbStaminaDrain * Time.deltaTime;
     }
@@ -329,7 +328,7 @@ public class Player2DPlatformerMovement : MonoBehaviour
     {
         if (isWallSliding) {
             if (wallJumpDuration < 0) wallJumpInput = false;
-            wallJumpDirection = transform.localScale.x; // gameObject direction seems to be flipped by default WHY?
+            wallJumpDirection = transform.localScale.x;
             wallJumpCounter = wallJumpTime;
         } else {
             wallJumpCounter -= Time.deltaTime;
@@ -343,13 +342,13 @@ public class Player2DPlatformerMovement : MonoBehaviour
 
     private IEnumerator WallJump()
     {
-        rb.velocity = new Vector2(wallJumpDirection * wallJumpForce.x, wallJumpForce.y);
+        rb.velocity = new Vector3(wallJumpDirection * wallJumpForce.x, wallJumpForce.y, rb.velocity.z);
         wallJumpCounter = 0;
 
         yield return new WaitForSeconds(wallJumpDuration);
         wallJumpInput = false;
     }
-
+    #endregion
 
     #region HELPER FUNCTIONS
 
@@ -364,7 +363,6 @@ public class Player2DPlatformerMovement : MonoBehaviour
         if (dashInput && canDash && !toggleDashOff) StartCoroutine(Dash());
         if (isWallGrabing && !toggleWallGrabOff) WallGrab();
         if (isWallSliding && !toggleWallSlideOff) WallSlide();
-        // if (isWallClimbing && !toggleWallClimbOff) WallClimb();
         if (wallJumpInput && !toggleWallJumpOff) StartCoroutine(WallJump());
     }
 
@@ -408,13 +406,13 @@ public class Player2DPlatformerMovement : MonoBehaviour
 
     void LowJump()
     {
-        if (rb.velocity.y > 0) rb.AddForce(Vector2.down * rb.velocity.y * lowJumpMult, ForceMode2D.Impulse);
+        if (rb.velocity.y > 0) rb.AddForce(Vector3.down * rb.velocity.y * lowJumpMult, ForceMode.Impulse);
     }
 
     void FallMultiplier()
     {
-        rb.AddForce(Vector2.up * rb.velocity.y * fallGravityMult / 10, ForceMode2D.Impulse);
-        rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed));
+        rb.AddForce(Vector3.up * rb.velocity.y * fallGravityMult / 10, ForceMode.Impulse);
+        rb.velocity = new Vector3(rb.velocity.x, Mathf.Max(rb.velocity.y, -maxFallSpeed), rb.velocity.z);
     }
 
     void CoyoteTime()
@@ -437,26 +435,21 @@ public class Player2DPlatformerMovement : MonoBehaviour
 
     void SetGravityScale(float gravityScale)
     {
-        rb.gravityScale = gravityScale;
+        rb.drag = gravityScale;
     }
 
     private bool IsGrounded()
     {
-        // Circle detection has a hard time detecting the ground if the player is standing on the edge of a platform
-        // return Physics2D.OverlapCircle(groundCheck.position, groundDetectionRadius, groundLayer);
-        return Physics2D.OverlapBox(groundCheck.position, groundDetectionSize, 0f, groundLayer);
+        return Physics.CheckBox(groundCheck.position, groundDetectionSize / 2, Quaternion.identity, groundLayer);
     }
 
     private bool IsWalled()
     {
-        return Physics2D.OverlapCircle(wallCheck.position, wallDetectionRadius, wallLayer);
+        return Physics.CheckSphere(wallCheck.position, wallDetectionRadius, wallLayer);
     }
 
     void CheckFacingDirection()
     {
-        // isMovingRight is not updated when stationary (no '==' case); 
-        // shouldn't be true when stationary (NEED TO FIX)
-        // isMovingRight = moveDirection.x > 0 ? true : moveDirection.x < 0 ? false : isMovingRight;
         isMovingRight = moveDirection.x > 0 ? true : false;
     }
 
@@ -472,13 +465,6 @@ public class Player2DPlatformerMovement : MonoBehaviour
             isFacingRight = false;
             Flip();
         }
-
-        // Needs player sprite to be the first child of this player object
-        //if (moveDirection.x > 0) {
-        //    gameObject.transform.GetChild(0).GetComponent<SpriteRenderer>().flipX = false;
-        //} else if (moveDirection.x < 0) {
-        //    gameObject.transform.GetChild(0).GetComponent<SpriteRenderer>().flipX = true;
-        //}
     }
 
     private void Flip()
@@ -496,9 +482,10 @@ public class Player2DPlatformerMovement : MonoBehaviour
     private void ValidateAndInitialize()
     {
         if (rb == null) {
-            rb = GetComponent<Rigidbody2D>();
-            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            rb.constraints = RigidbodyConstraints2D.FreezeRotation; // Freeze Z rotation
+            rb = GetComponent<Rigidbody>();
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            rb.constraints = RigidbodyConstraints.FreezeRotation; // Freeze X, Y, and Z rotation
+            rb.constraints = RigidbodyConstraints.FreezePositionZ; // Freeze Z position
         }
 
         accelForce = (50 * acceleration) / maxSpeed;
@@ -507,12 +494,11 @@ public class Player2DPlatformerMovement : MonoBehaviour
         acceleration = Mathf.Clamp(acceleration, 0.01f, maxSpeed);
         decceleration = Mathf.Clamp(decceleration, 0.01f, maxSpeed);
 
-        // Calculate The RigidBody2D Gravity Scale
         gravityStrength = -(2 * jumpHeight) / (jumpTimeToApex * jumpTimeToApex);
-        gravityScale = gravityStrength / Physics2D.gravity.y;
-        rb.gravityScale = gravityScale;
+        gravityScale = gravityStrength / Physics.gravity.y;
+        rb.drag = gravityScale;
 
-        jumpForce = Mathf.Sqrt(jumpHeight * -2 * (Physics2D.gravity.y * rb.gravityScale));
+        jumpForce = Mathf.Sqrt(jumpHeight * -2 * (Physics.gravity.y * rb.drag));
 
         tempJumpLimit = toggleDoubleJumpOff ? 1 : jumpLimit;
         jumpCounter = tempJumpLimit;
@@ -520,10 +506,7 @@ public class Player2DPlatformerMovement : MonoBehaviour
         tempWallGrabTime = toggleWallGrabOff ? 0 : wallGrabTime;
         wallGrabCounter = tempWallGrabTime;
     }
-
     #endregion
-
-    // -----------------------------------------------------
 
     void OnValidate()
     {
